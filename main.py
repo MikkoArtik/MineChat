@@ -1,6 +1,9 @@
+import os
 from datetime import datetime
 import logging
 import argparse
+
+import dotenv
 
 import asyncio
 import aiofiles
@@ -21,7 +24,8 @@ async def save_messages(host: str, port: int, output_file: str):
     async with aiofiles.open(output_file, 'a') as file_handle:
         message = message_formatting('Установлено соединение')
         logging.debug(message)
-        await file_handle.write(message+'\n')
+        await file_handle.write('-' * 50 + '\n')
+        await file_handle.write(message + '\n')
 
         while True:
             message = await reader.readline()
@@ -39,6 +43,8 @@ async def save_messages(host: str, port: int, output_file: str):
 
 
 if __name__ == '__main__':
+    dotenv.load_dotenv()
+
     parser = argparse.ArgumentParser(description='Minechat listener')
     parser.add_argument('--host', type=str, help='server host')
     parser.add_argument('--port', type=int, help='server port number')
@@ -48,12 +54,18 @@ if __name__ == '__main__':
                         help='turn on/off logger. Values - ON/OFF')
     args = parser.parse_args()
 
-    if not args.host or not args.port or not args.out:
+    if ((not args.host or not args.port or not args.out) and
+            not os.path.exists('.env')):
         logging.error('required parameters not found')
+        exit()
 
     if args.debug == 'ON':
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.ERROR)
 
-    asyncio.run(save_messages(args.host, args.port, args.out))
+    host_addr = args.host if args.host else os.getenv('HOST')
+    port = args.port if args.port else int(os.getenv('PORT'))
+    out_path = args.out if args.out else os.getenv('OUT')
+
+    asyncio.run(save_messages(host_addr, port, out_path))
