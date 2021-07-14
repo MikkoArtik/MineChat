@@ -1,8 +1,12 @@
 import os
 import logging
+import json
 import asyncio
 
 import dotenv
+
+
+MAX_MESSAGE_BYTE_SIZE = 1024
 
 
 async def send_message(host: str, port: int, hash_key: str,
@@ -15,7 +19,7 @@ async def send_message(host: str, port: int, hash_key: str,
 
     logging.debug('Соединение установлено')
 
-    server_message = await reader.readline()
+    server_message = await reader.read(MAX_MESSAGE_BYTE_SIZE)
     server_message = server_message.decode().rstrip()
     logging.debug(f'Server: {server_message}')
 
@@ -24,8 +28,18 @@ async def send_message(host: str, port: int, hash_key: str,
     writer.write(hash_key.encode())
     await writer.drain()
 
-    server_message = await reader.readline()
-    server_message += await reader.readline()
+    hash_info = await reader.readline()
+    hash_info = hash_info.decode().rstrip()
+    if json.loads(hash_info) is None:
+        logging.error('Server: Неверный токен. '
+                      'Проверьте его или зарегистрируйте заново')
+        writer.close()
+        await writer.wait_closed()
+        return
+    else:
+        logging.debug(f'Server: {hash_info}')
+
+    server_message = await reader.read(MAX_MESSAGE_BYTE_SIZE)
     server_message = server_message.decode().rstrip()
     logging.debug(f'Server: {server_message}')
 
@@ -34,7 +48,7 @@ async def send_message(host: str, port: int, hash_key: str,
     writer.write(message_text.encode())
     await writer.drain()
 
-    server_message = await reader.readline()
+    server_message = await reader.read(MAX_MESSAGE_BYTE_SIZE)
     server_message = server_message.decode().rstrip()
     logging.debug(f'Server: {server_message}')
 
