@@ -65,7 +65,7 @@ if __name__ == '__main__':
         logging.basicConfig(level=logging.ERROR)
 
     host_addr = args.host if args.host else os.getenv('HOST')
-    port = args.port if args.port else int(os.getenv('PORT'))
+    port = args.port if args.port else int(os.getenv('READ_PORT'))
     out_path = args.out if args.out else os.getenv('OUT')
 
     asyncio.run(save_messages(host_addr, port, out_path))

@@ -56,6 +56,9 @@ cover/
 *.mo
 *.pot
 
+# output file format
+*.dat
+
 # Django stuff:
 *.log
 local_settings.py
@@ -138,4 +141,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-
