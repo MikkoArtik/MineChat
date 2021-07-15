@@ -14,7 +14,7 @@ async def send_message(host: str, port: int, hash_key: str,
     try:
         reader, writer = await asyncio.open_connection(host=host, port=port)
     except ConnectionRefusedError:
-        logging.error('Connection refused')
+        logging.error('Ошибка соединения')
         return
 
     logging.debug('Соединение установлено')
@@ -34,7 +34,6 @@ async def send_message(host: str, port: int, hash_key: str,
         logging.error('Server: Неверный токен. '
                       'Проверьте его или зарегистрируйте заново')
         writer.close()
-        await writer.wait_closed()
         return
     else:
         logging.debug(f'Server: {hash_info}')
