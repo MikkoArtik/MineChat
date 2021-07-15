@@ -37,6 +37,7 @@ async def register(reader: StreamReader, writer: StreamWriter, nickname: str):
 
     await reader.readline()
 
+    nickname = nickname.replace('\n', '-')
     writer.write(f'{nickname}\n'.encode())
     await writer.drain()
 
@@ -75,3 +76,5 @@ async def submit_message(reader: StreamReader, writer: StreamWriter,
     message_text += '\n\n'
     writer.write(message_text.encode())
     await writer.drain()
+
+
