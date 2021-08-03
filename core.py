@@ -51,7 +51,7 @@ async def is_authorise(reader: StreamReader, writer: StreamWriter,
     hash_info = await reader.readline()
     hash_info = hash_info.decode().rstrip()
     if json.loads(hash_info) is None:
-        logging.error('Invalid token. Check token or register new')
+        logging.error('Invalid token. Check token or register new user')
         writer.close()
         await writer.wait_closed()
         logging.debug('Connection was closed')
@@ -66,5 +66,3 @@ async def submit_message(reader: StreamReader, writer: StreamWriter,
     message_text += '\n\n'
     writer.write(message_text.encode())
     await writer.drain()
-
-
