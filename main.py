@@ -14,6 +14,7 @@ DEFAULT_PORT = 5050
 async def main():
     parser = argparse.ArgumentParser(
         description='Utility for sending messages to server')
+    parser.add_argument('--default', type=bool, help='Default server host and port')
     parser.add_argument('--host', type=str, help='Server address')
     parser.add_argument('--port', type=int, help='Server port')
     parser.add_argument('--token', type=str, help='User token')
@@ -22,15 +23,12 @@ async def main():
 
     arguments = parser.parse_args()
 
-    if arguments.host:
-        host = arguments.host
-    else:
+    if arguments.default:
         host = DEFAULT_HOST
-
-    if arguments.port:
-        port = arguments.port
-    else:
         port = DEFAULT_PORT
+    else:
+        host = arguments.host
+        port = arguments.port
 
     connection = await get_connection(host, port)
     if not connection:
