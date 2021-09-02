@@ -30,8 +30,8 @@ async def register(reader: StreamReader, writer: StreamWriter, nickname: str):
     writer.write(f'{nickname}\n'.encode())
     await writer.drain()
 
-    user_info = await reader.readline()
-    user_info = json.loads(user_info.decode())
+    server_line = await reader.readline()
+    user_info = json.loads(server_line.decode())
 
     logging.debug(f'Account token: {user_info["account_hash"]}')
 
