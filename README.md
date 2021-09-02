@@ -19,7 +19,7 @@ python main.py [--default] [--host] [--port] [--token] [--nick] [message]
 ```
 где:
 
-+ default - указание использования хоста и порта по умолчанию (minechat.dvmn.org, 5050)
++ default - указание использования хоста и порта по умолчанию (minechat.dvmn.org, 5050). Значения - True/False
 + host - адрес хоста
 + port - номер порта
 + token - токен авторизованного пользователя (по умолчанию берется из 

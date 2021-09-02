@@ -4,6 +4,7 @@ import logging
 import asyncio
 from asyncio import StreamReader, StreamWriter
 
+
 EMPTY_LINE = '\n'
 MAX_MESSAGE_BYTE_SIZE = 1024
 
@@ -34,15 +35,13 @@ async def register(reader: StreamReader, writer: StreamWriter, nickname: str):
 
     logging.debug(f'Account token: {user_info["account_hash"]}')
 
-    writer.close()
-    await writer.wait_closed()
-    logging.debug('Connection was closed')
+    await reader.readline()
     return user_info['account_hash']
 
 
 async def is_authorise(reader: StreamReader, writer: StreamWriter,
                        hash_key: str):
-    await reader.read(MAX_MESSAGE_BYTE_SIZE)
+    await reader.readline()
 
     hash_key += '\n'
     writer.write(hash_key.encode())
@@ -56,13 +55,11 @@ async def is_authorise(reader: StreamReader, writer: StreamWriter,
         await writer.wait_closed()
         logging.debug('Connection was closed')
         return False
+    await reader.readline()
     return True
 
 
-async def submit_message(reader: StreamReader, writer: StreamWriter,
-                         message_text: str):
-    await reader.read(MAX_MESSAGE_BYTE_SIZE)
-
-    message_text += '\n\n'
+async def submit_message(writer: StreamWriter, message_text: str):
+    message_text = message_text.rstrip() + '\n\n'
     writer.write(message_text.encode())
     await writer.drain()
