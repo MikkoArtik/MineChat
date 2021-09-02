@@ -15,17 +15,20 @@ pip install -r requiremetns.txt
 ## Как запустить
 
 ```commandline
-python main.py [--default] [--host] [--port] [--token] [--nick] [message]
+python main.py [mode] [--debug] [--default] [--host] [--port] [--token] [--nick] [--message] [--outfile]
 ```
 где:
 
-+ default - указание использования хоста и порта по умолчанию (minechat.dvmn.org, 5050). Значения - True/False
++ mode - обязательный параметр - тип действия (send - отправка сообщения, 
+  listen - прослушивание сервера)
++ debug - включение отладочных сообщений
++ default - указание использования хоста и порта по умолчанию
 + host - адрес хоста
 + port - номер порта
-+ token - токен авторизованного пользователя (по умолчанию берется из 
-  файла .env)
++ token - токен авторизованного пользователя
 + nick - имя нового пользователя для регистрации
-+ message - текст сообщения
++ message - текст сообщения (обязателен при mode=send)
++ outfile - путь к файлу для сохранения истории сообщений (обязателен при mode=listen)
   
 # Цель проекта
 

@@ -87,6 +87,7 @@ async def authorization(reader: StreamReader, writer: StreamWriter,
     if json.loads(hash_info) is None:
         raise InvalidToken(f'Token {token} is not exist')
 
+    logging.debug('Авторизация прошла успешно')
     await reader.readline()
 
 
@@ -94,3 +95,4 @@ async def submit_message(writer: StreamWriter, message_text: str):
     message_text = message_text.rstrip() + '\n\n'
     writer.write(message_text.encode())
     await writer.drain()
+    logging.debug('Сообщение успешно отправлено')
