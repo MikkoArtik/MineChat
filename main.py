@@ -4,11 +4,11 @@ import asyncio
 
 import dotenv
 
-from core import get_connection, register, is_authorise, submit_message
+from core import create_connection, register, authorization, submit_message
 
 
 DEFAULT_HOST = 'minechat.dvmn.org'
-DEFAULT_PORT = 5050
+DEFAULT_WRITE_PORT = 5050
 
 
 async def main():
@@ -27,33 +27,26 @@ async def main():
 
     if arguments.default:
         host = DEFAULT_HOST
-        port = DEFAULT_PORT
+        port = DEFAULT_WRITE_PORT
     else:
         host = arguments.host
         port = arguments.writeport
 
-    connection = await get_connection(host, port)
-    if not connection:
-        return
-    reader, writer = connection
+    async with create_connection(host, port) as connection:
+        reader, writer = connection
 
-    if arguments.nick:
-        token = await register(reader, writer, arguments.nick)
-        dotenv.set_key('.env', 'TOKEN', token)
-        is_auth = True
-    else:
-        if arguments.token:
-            token = arguments.token
+        if arguments.nick:
+            token = await register(reader, writer, arguments.nick)
+            dotenv.set_key('.env', 'TOKEN', token)
         else:
-            dotenv.load_dotenv()
-            token = os.getenv('TOKEN')
-        is_auth = await is_authorise(reader, writer, token)
+            if arguments.token:
+                token = arguments.token
+            else:
+                dotenv.load_dotenv()
+                token = os.getenv('TOKEN')
+            await authorization(reader, writer, token)
 
-    if is_auth:
         await submit_message(writer, arguments.message)
-
-    writer.close()
-    await writer.wait_closed()
 
 
 if __name__ == '__main__':

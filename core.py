@@ -3,22 +3,30 @@ import logging
 
 import asyncio
 from asyncio import StreamReader, StreamWriter
+from contextlib import asynccontextmanager
 
 
 EMPTY_LINE = '\n'
 MAX_MESSAGE_BYTE_SIZE = 1024
 
 
-async def get_connection(host_address: str, port: int):
+class InvalidToken(Exception):
+    pass
+
+
+@asynccontextmanager
+async def create_connection(host_address: str, port: int):
+    reader, writer = await asyncio.open_connection(host_address, port)
     try:
-        reader, writer = await asyncio.open_connection(host_address, port)
-        return reader, writer
-    except ConnectionRefusedError:
-        logging.error('Error of connection')
-        return
+        yield reader, writer
+    except InvalidToken:
+        logging.error('Invalid token. Check token or register new user')
+    finally:
+        writer.close()
+        await writer.wait_closed()
 
 
-async def register(reader: StreamReader, writer: StreamWriter, nickname: str):
+async def register(reader: StreamReader, writer: StreamWriter, nickname: str) -> str:
     await reader.readline()
 
     writer.write(EMPTY_LINE.encode())
@@ -39,24 +47,20 @@ async def register(reader: StreamReader, writer: StreamWriter, nickname: str):
     return user_info['account_hash']
 
 
-async def is_authorise(reader: StreamReader, writer: StreamWriter,
-                       hash_key: str):
+async def authorization(reader: StreamReader, writer: StreamWriter,
+                        token: str):
     await reader.readline()
 
-    hash_key += '\n'
-    writer.write(hash_key.encode())
+    token += '\n'
+    writer.write(token.encode())
     await writer.drain()
 
     hash_info = await reader.readline()
     hash_info = hash_info.decode().rstrip()
     if json.loads(hash_info) is None:
-        logging.error('Invalid token. Check token or register new user')
-        writer.close()
-        await writer.wait_closed()
-        logging.debug('Connection was closed')
-        return False
+        raise InvalidToken(f'Token {token} is not exist')
+
     await reader.readline()
-    return True
 
 
 async def submit_message(writer: StreamWriter, message_text: str):
