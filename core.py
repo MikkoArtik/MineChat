@@ -1,7 +1,9 @@
 import json
 import logging
+from datetime import datetime
 
 import asyncio
+import aiofiles
 from asyncio import StreamReader, StreamWriter
 from contextlib import asynccontextmanager
 
@@ -19,11 +21,36 @@ async def create_connection(host_address: str, port: int):
     reader, writer = await asyncio.open_connection(host_address, port)
     try:
         yield reader, writer
-    except InvalidToken:
-        logging.error('Invalid token. Check token or register new user')
+    except Exception as e:
+        logging.error(str(e))
     finally:
         writer.close()
         await writer.wait_closed()
+
+
+def message_formatting(message: str) -> str:
+    current_datetime = datetime.now().strftime('%d.%m.%y %H:%M')
+    return f'[{current_datetime}] {message}'
+
+
+async def listen_server(reader: StreamReader, output_file: str):
+    async with aiofiles.open(output_file, 'a') as handle:
+        await handle.write('-' * 50 + '\n')
+
+        message = message_formatting('Соединение установлено')
+        logging.debug(message)
+        await handle.write(f'{message}\n')
+
+        while True:
+            server_response = await reader.readline()
+            try:
+                text_line = server_response.decode().rstrip()
+            except UnicodeDecodeError:
+                break
+            message = message_formatting(text_line)
+            logging.debug(message)
+            await handle.write(f'{message}\n')
+            await handle.flush()
 
 
 async def register(reader: StreamReader, writer: StreamWriter, nickname: str) -> str:
