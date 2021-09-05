@@ -34,7 +34,7 @@ def format_message(message: str) -> str:
 
 
 async def listen_server(reader: StreamReader, output_file: str):
-    async with aiofiles.open(output_file, 'a') as handle:
+    async with aiofiles.open(output_file, 'a', encoding='utf-8') as handle:
         await handle.write('-' * 50 + '\n')
 
         message = format_message('Соединение установлено')
@@ -44,7 +44,7 @@ async def listen_server(reader: StreamReader, output_file: str):
         while True:
             server_response = await reader.readline()
             try:
-                text_line = server_response.decode().rstrip()
+                text_line = server_response.decode('utf-8').rstrip()
             except UnicodeDecodeError:
                 break
             message = format_message(text_line)
