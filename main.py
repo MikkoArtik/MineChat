@@ -5,7 +5,7 @@ import asyncio
 
 import dotenv
 
-from core import create_connection, register, authorization, \
+from core import create_connection, register, authorize, \
     submit_message, listen_server
 
 
@@ -58,7 +58,7 @@ async def main():
                 else:
                     dotenv.load_dotenv()
                     token = os.getenv('TOKEN')
-                await authorization(reader, writer, token)
+                await authorize(reader, writer, token)
 
             if not arguments.message:
                 logging.error('Empty message text')

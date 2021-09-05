@@ -28,7 +28,7 @@ async def create_connection(host_address: str, port: int):
         await writer.wait_closed()
 
 
-def message_formatting(message: str) -> str:
+def format_message(message: str) -> str:
     current_datetime = datetime.now().strftime('%d.%m.%y %H:%M')
     return f'[{current_datetime}] {message}'
 
@@ -37,7 +37,7 @@ async def listen_server(reader: StreamReader, output_file: str):
     async with aiofiles.open(output_file, 'a') as handle:
         await handle.write('-' * 50 + '\n')
 
-        message = message_formatting('Соединение установлено')
+        message = format_message('Соединение установлено')
         logging.debug(message)
         await handle.write(f'{message}\n')
 
@@ -47,7 +47,7 @@ async def listen_server(reader: StreamReader, output_file: str):
                 text_line = server_response.decode().rstrip()
             except UnicodeDecodeError:
                 break
-            message = message_formatting(text_line)
+            message = format_message(text_line)
             logging.debug(message)
             await handle.write(f'{message}\n')
             await handle.flush()
@@ -74,8 +74,8 @@ async def register(reader: StreamReader, writer: StreamWriter, nickname: str) ->
     return user_info['account_hash']
 
 
-async def authorization(reader: StreamReader, writer: StreamWriter,
-                        token: str):
+async def authorize(reader: StreamReader, writer: StreamWriter,
+                    token: str):
     await reader.readline()
 
     token += '\n'
