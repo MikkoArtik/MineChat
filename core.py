@@ -50,7 +50,6 @@ async def listen_server(reader: StreamReader, output_file: str):
             message = format_message(text_line)
             logging.debug(message)
             await handle.write(f'{message}\n')
-            await handle.flush()
 
 
 async def register(reader: StreamReader, writer: StreamWriter, nickname: str) -> str:
