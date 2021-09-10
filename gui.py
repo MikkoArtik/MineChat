@@ -3,13 +3,15 @@ import asyncio
 import dotenv
 from argparse import ArgumentParser
 
-from core import read_msgs
+from core import read_msgs, save_msgs
 import interface
 
 
 DEFAULT_HOST = 'minechat.dvmn.org'
 DEFAULT_PORT = 5000
 EMPTY_VALUE = -9999
+
+MSG_HISTORY_FILE = 'm.txt'
 
 
 async def main():
@@ -36,13 +38,19 @@ async def main():
     else:
         token = EMPTY_VALUE
 
-    messages_queue = asyncio.Queue()
+    showing_msg_queue = asyncio.Queue()
     sending_queue = asyncio.Queue()
     status_queue = asyncio.Queue()
+    history_msg_queue = asyncio.Queue()
 
-    create_msgs_coroutine = read_msgs(host, port, messages_queue)
-    draw_interface_coroutine = interface.draw(messages_queue, sending_queue, status_queue)
-    await asyncio.gather(create_msgs_coroutine, draw_interface_coroutine)
+    showing_msg_coroutine = read_msgs(host, port, showing_msg_queue,
+                                      history_msg_queue, MSG_HISTORY_FILE)
+    saving_msg_coroutine = save_msgs(MSG_HISTORY_FILE, history_msg_queue)
+    draw_interface_coroutine = interface.draw(showing_msg_queue, sending_queue,
+                                              status_queue)
+    await asyncio.gather(draw_interface_coroutine,
+                         showing_msg_coroutine,
+                         saving_msg_coroutine)
 
 
 if __name__ == '__main__':

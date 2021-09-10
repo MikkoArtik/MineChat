@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 from datetime import datetime
@@ -9,7 +10,6 @@ from contextlib import asynccontextmanager
 
 
 EMPTY_LINE = '\n'
-MAX_MESSAGE_BYTE_SIZE = 1024
 
 
 class InvalidToken(Exception):
@@ -28,16 +28,22 @@ async def create_connection(host_address: str, port: int):
         await writer.wait_closed()
 
 
-def format_message(message: str) -> str:
+def format_msg(msg_text: str) -> str:
     current_datetime = datetime.now().strftime('%d.%m.%y %H:%M')
-    return f'[{current_datetime}] {message}'
+    return f'[{current_datetime}] {msg_text}'
 
 
-async def read_msgs(host: str, port: int, queue: asyncio.Queue):
+async def read_msgs(host: str, port: int,
+                    showing_msg_queue: asyncio.Queue,
+                    saving_msg_queue: asyncio.Queue,
+                    msg_history_file: str):
+    if os.path.exists(msg_history_file):
+        async with aiofiles.open(msg_history_file) as handle:
+            async for line in handle:
+                showing_msg_queue.put_nowait(line.rstrip())
+
     async with create_connection(host, port) as connection:
         reader, writer = connection
-        text_line = ['-' * 50, 'Соединение установлено', '-' * 50]
-        queue.put_nowait('\n'.join(text_line))
         while True:
             server_response = await reader.readline()
             try:
@@ -45,15 +51,23 @@ async def read_msgs(host: str, port: int, queue: asyncio.Queue):
             except UnicodeDecodeError:
                 break
 
-            message_text = format_message(text_line)
-            queue.put_nowait(message_text)
+            msg_text = format_msg(text_line)
+            showing_msg_queue.put_nowait(msg_text)
+            saving_msg_queue.put_nowait(msg_text)
+
+
+async def save_msgs(filepath: str, queue: asyncio.Queue):
+    async with aiofiles.open(filepath, 'a') as f:
+        while True:
+            msg_text = await queue.get()
+            await f.write(f'{msg_text}\n')
 
 
 async def listen_server(reader: StreamReader, output_file: str):
     async with aiofiles.open(output_file, 'a', encoding='utf-8') as handle:
         await handle.write('-' * 50 + '\n')
 
-        message = format_message('Соединение установлено')
+        message = format_msg('Соединение установлено')
         logging.debug(message)
         await handle.write(f'{message}\n')
 
@@ -63,7 +77,7 @@ async def listen_server(reader: StreamReader, output_file: str):
                 text_line = server_response.decode('utf-8').rstrip()
             except UnicodeDecodeError:
                 break
-            message = format_message(text_line)
+            message = format_msg(text_line)
             logging.debug(message)
             await handle.write(f'{message}\n')
 
