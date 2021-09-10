@@ -1,22 +1,15 @@
-from datetime import datetime
 import asyncio
 
 import dotenv
 from argparse import ArgumentParser
 
+from core import read_msgs
 import interface
 
 
 DEFAULT_HOST = 'minechat.dvmn.org'
-DEFAULT_PORT = 5050
+DEFAULT_PORT = 5000
 EMPTY_VALUE = -9999
-
-
-async def generate_msgs(queue: asyncio.Queue):
-    while True:
-        msg_text = f'Ping {int(datetime.now().timestamp())}'
-        queue.put_nowait(msg_text)
-        await asyncio.sleep(2)
 
 
 async def main():
@@ -47,7 +40,7 @@ async def main():
     sending_queue = asyncio.Queue()
     status_queue = asyncio.Queue()
 
-    create_msgs_coroutine = generate_msgs(messages_queue)
+    create_msgs_coroutine = read_msgs(host, port, messages_queue)
     draw_interface_coroutine = interface.draw(messages_queue, sending_queue, status_queue)
     await asyncio.gather(create_msgs_coroutine, draw_interface_coroutine)
 

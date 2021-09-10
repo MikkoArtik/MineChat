@@ -33,6 +33,22 @@ def format_message(message: str) -> str:
     return f'[{current_datetime}] {message}'
 
 
+async def read_msgs(host: str, port: int, queue: asyncio.Queue):
+    async with create_connection(host, port) as connection:
+        reader, writer = connection
+        text_line = ['-' * 50, 'Соединение установлено', '-' * 50]
+        queue.put_nowait('\n'.join(text_line))
+        while True:
+            server_response = await reader.readline()
+            try:
+                text_line = server_response.decode('utf-8').rstrip()
+            except UnicodeDecodeError:
+                break
+
+            message_text = format_message(text_line)
+            queue.put_nowait(message_text)
+
+
 async def listen_server(reader: StreamReader, output_file: str):
     async with aiofiles.open(output_file, 'a', encoding='utf-8') as handle:
         await handle.write('-' * 50 + '\n')
