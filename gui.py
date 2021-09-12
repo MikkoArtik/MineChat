@@ -1,10 +1,12 @@
 import asyncio
 import logging
 import os
+from tkinter import messagebox
 
 import dotenv
 from argparse import ArgumentParser
 
+from core import InvalidToken
 from core import create_connection, authorize
 from core import read_msgs, save_msgs, send_msgs
 import interface
@@ -52,7 +54,12 @@ async def main():
 
     async with create_connection(host, SENDING_PORT) as connection:
         reader, writer = connection
-        await authorize(reader, writer, token)
+        try:
+            await authorize(reader, writer, token)
+        except InvalidToken:
+            messagebox.showinfo('Неверный токен',
+                                'Проверьте правильность ввода токена')
+            return
 
         showing_msg_queue = asyncio.Queue()
         sending_queue = asyncio.Queue()
