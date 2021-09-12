@@ -63,10 +63,11 @@ async def save_msgs(filepath: str, queue: asyncio.Queue):
             await f.write(f'{msg_text}\n')
 
 
-async def send_msgs(host: str, port: int, queue: asyncio.Queue):
+async def send_msgs(writer: StreamWriter, queue: asyncio.Queue):
     while True:
         msg_text = await queue.get()
         logging.debug(f'Пользователь написал: {msg_text}')
+        await submit_message(writer, msg_text)
 
 
 async def listen_server(reader: StreamReader, output_file: str):
@@ -117,12 +118,12 @@ async def authorize(reader: StreamReader, writer: StreamWriter,
     writer.write(token.encode())
     await writer.drain()
 
-    hash_info = await reader.readline()
-    hash_info = hash_info.decode().rstrip()
-    if json.loads(hash_info) is None:
+    server_response = await reader.readline()
+    server_response = server_response.decode().rstrip()
+    hash_info = json.loads(server_response)
+    if hash_info is None:
         raise InvalidToken(f'Token {token} is not exist')
-
-    logging.debug('Авторизация прошла успешно')
+    logging.debug(f'Выполнена авторизация. Имя пользователя - {hash_info["nickname"]}')
     await reader.readline()
 
 
