@@ -63,6 +63,12 @@ async def save_msgs(filepath: str, queue: asyncio.Queue):
             await f.write(f'{msg_text}\n')
 
 
+async def send_msgs(host: str, port: int, queue: asyncio.Queue):
+    while True:
+        msg_text = await queue.get()
+        logging.debug(f'Пользователь написал: {msg_text}')
+
+
 async def listen_server(reader: StreamReader, output_file: str):
     async with aiofiles.open(output_file, 'a', encoding='utf-8') as handle:
         await handle.write('-' * 50 + '\n')
