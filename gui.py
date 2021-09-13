@@ -11,8 +11,8 @@ from core import InvalidToken
 from core import create_send_connection, create_read_connection
 from core import authorize
 from core import read_history_msgs, read_msgs, save_msgs, send_msgs
-from interface import NicknameReceived
 import interface
+from interface import NicknameReceived
 
 
 DEFAULT_HOST = 'minechat.dvmn.org'
@@ -38,7 +38,8 @@ async def main():
     parser.add_argument('--read_port', type=int, help='Reading host port')
     parser.add_argument('-send_port', type=int, help='Sending host port')
     parser.add_argument('--token', type=str, help='User token')
-    parser.add_argument('--debug', type=bool, help='Turn on debug mode')
+    parser.add_argument('--debug', type=bool, choices=[True, False],
+                        help='Turn on debug mode')
 
     dotenv.load_dotenv('.env')
     arguments = parser.parse_args()

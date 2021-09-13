@@ -27,9 +27,9 @@ async def create_read_connection(host_address: str, port: int,
     except Exception as e:
         logging.error(str(e))
     finally:
+        queue.put_nowait(ReadConnectionStateChanged.CLOSED)
         writer.close()
         await writer.wait_closed()
-        queue.put_nowait(ReadConnectionStateChanged.CLOSED)
 
 
 @asynccontextmanager
@@ -43,9 +43,9 @@ async def create_send_connection(host_address: str, port: int,
     except Exception as e:
         logging.error(str(e))
     finally:
+        queue.put_nowait(SendingConnectionStateChanged.CLOSED)
         writer.close()
         await writer.wait_closed()
-        queue.put_nowait(SendingConnectionStateChanged.CLOSED)
 
 
 async def read_history_msgs(filepath: str, queue: asyncio.Queue):
