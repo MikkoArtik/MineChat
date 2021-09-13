@@ -1,4 +1,5 @@
 import asyncio
+from asyncio import Queue
 import logging
 import os
 from tkinter import messagebox
@@ -7,17 +8,26 @@ import dotenv
 from argparse import ArgumentParser
 
 from core import InvalidToken
-from core import create_connection, authorize
-from core import read_msgs, save_msgs, send_msgs
+from core import create_send_connection, create_read_connection
+from core import authorize
+from core import read_history_msgs, read_msgs, save_msgs, send_msgs
+from interface import NicknameReceived
 import interface
 
 
 DEFAULT_HOST = 'minechat.dvmn.org'
-READING_PORT = 5000
-SENDING_PORT = 5050
-EMPTY_VALUE = -9999
-
+READING_PORT, SENDING_PORT = 5000, 5050
 MSG_HISTORY_FILE = 'm.txt'
+
+
+async def read_server_msgs(host: str, port: int, status_queue: Queue,
+                           showing_msg_queue: Queue, saving_msg_queue: Queue):
+    await read_history_msgs(MSG_HISTORY_FILE, showing_msg_queue)
+    async with create_read_connection(host, port, status_queue) as connection:
+        reader, _ = connection
+        async for msg_text in read_msgs(reader):
+            showing_msg_queue.put_nowait(msg_text)
+            saving_msg_queue.put_nowait(msg_text)
 
 
 async def main():
@@ -52,30 +62,34 @@ async def main():
     else:
         token = os.getenv('TOKEN')
 
-    async with create_connection(host, SENDING_PORT) as connection:
+    showing_msg_queue = Queue()
+    saving_msgs_queue = Queue()
+
+    sending_queue = Queue()
+    status_queue = Queue()
+
+    draw_interface_coroutine = interface.draw(showing_msg_queue,
+                                              sending_queue,
+                                              status_queue)
+
+    read_coroutine = read_server_msgs(host, read_port, status_queue,
+                                      showing_msg_queue, saving_msgs_queue)
+
+    save_coroutine = save_msgs(MSG_HISTORY_FILE, saving_msgs_queue)
+
+    async with create_send_connection(host, send_port, status_queue) as connection:
         reader, writer = connection
         try:
-            await authorize(reader, writer, token)
+            nickname = await authorize(reader, writer, token)
         except InvalidToken:
             messagebox.showinfo('Неверный токен',
                                 'Проверьте правильность ввода токена')
             return
+        status_queue.put_nowait(NicknameReceived(nickname))
 
-        showing_msg_queue = asyncio.Queue()
-        sending_queue = asyncio.Queue()
-        status_queue = asyncio.Queue()
-        history_msg_queue = asyncio.Queue()
-
-        showing_msg_coroutine = read_msgs(host, read_port, showing_msg_queue,
-                                          history_msg_queue, MSG_HISTORY_FILE)
-        saving_msg_coroutine = save_msgs(MSG_HISTORY_FILE, history_msg_queue)
-        sending_msg_coroutine = send_msgs(writer, sending_queue)
-        draw_interface_coroutine = interface.draw(
-            showing_msg_queue, sending_queue, status_queue)
-        await asyncio.gather(draw_interface_coroutine,
-                             showing_msg_coroutine,
-                             saving_msg_coroutine,
-                             sending_msg_coroutine)
+        send_coroutine = send_msgs(writer, sending_queue)
+        await asyncio.gather(draw_interface_coroutine, read_coroutine,
+                             save_coroutine, send_coroutine)
 
 
 if __name__ == '__main__':

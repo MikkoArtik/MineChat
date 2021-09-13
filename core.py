@@ -8,8 +8,8 @@ import aiofiles
 from asyncio import StreamReader, StreamWriter
 from contextlib import asynccontextmanager
 
-
-EMPTY_LINE = '\n'
+from interface import ReadConnectionStateChanged
+from interface import SendingConnectionStateChanged
 
 
 class InvalidToken(Exception):
@@ -17,15 +17,43 @@ class InvalidToken(Exception):
 
 
 @asynccontextmanager
-async def create_connection(host_address: str, port: int):
+async def create_read_connection(host_address: str, port: int,
+                                 queue: asyncio.Queue):
+    queue.put_nowait(ReadConnectionStateChanged.INITIATED)
     reader, writer = await asyncio.open_connection(host_address, port)
     try:
+        queue.put_nowait(ReadConnectionStateChanged.ESTABLISHED)
         yield reader, writer
     except Exception as e:
         logging.error(str(e))
     finally:
         writer.close()
         await writer.wait_closed()
+        queue.put_nowait(ReadConnectionStateChanged.CLOSED)
+
+
+@asynccontextmanager
+async def create_send_connection(host_address: str, port: int,
+                                 queue: asyncio.Queue):
+    queue.put_nowait(SendingConnectionStateChanged.INITIATED)
+    reader, writer = await asyncio.open_connection(host_address, port)
+    try:
+        queue.put_nowait(SendingConnectionStateChanged.ESTABLISHED)
+        yield reader, writer
+    except Exception as e:
+        logging.error(str(e))
+    finally:
+        writer.close()
+        await writer.wait_closed()
+        queue.put_nowait(SendingConnectionStateChanged.CLOSED)
+
+
+async def read_history_msgs(filepath: str, queue: asyncio.Queue):
+    if not os.path.exists(filepath):
+        return
+    async with aiofiles.open(filepath) as handle:
+        async for line in handle:
+            queue.put_nowait(line.rstrip())
 
 
 def format_msg(msg_text: str) -> str:
@@ -33,27 +61,15 @@ def format_msg(msg_text: str) -> str:
     return f'[{current_datetime}] {msg_text}'
 
 
-async def read_msgs(host: str, port: int,
-                    showing_msg_queue: asyncio.Queue,
-                    saving_msg_queue: asyncio.Queue,
-                    msg_history_file: str):
-    if os.path.exists(msg_history_file):
-        async with aiofiles.open(msg_history_file) as handle:
-            async for line in handle:
-                showing_msg_queue.put_nowait(line.rstrip())
-
-    async with create_connection(host, port) as connection:
-        reader, writer = connection
-        while True:
-            server_response = await reader.readline()
-            try:
-                text_line = server_response.decode('utf-8').rstrip()
-            except UnicodeDecodeError:
-                break
-
-            msg_text = format_msg(text_line)
-            showing_msg_queue.put_nowait(msg_text)
-            saving_msg_queue.put_nowait(msg_text)
+async def read_msgs(reader: StreamReader):
+    while True:
+        server_response = await reader.readline()
+        try:
+            msg_src_text = server_response.decode('utf-8').rstrip()
+            msg_text = format_msg(msg_src_text)
+        except UnicodeDecodeError:
+            break
+        yield msg_text
 
 
 async def save_msgs(filepath: str, queue: asyncio.Queue):
@@ -61,53 +77,6 @@ async def save_msgs(filepath: str, queue: asyncio.Queue):
         while True:
             msg_text = await queue.get()
             await f.write(f'{msg_text}\n')
-
-
-async def send_msgs(writer: StreamWriter, queue: asyncio.Queue):
-    while True:
-        msg_text = await queue.get()
-        logging.debug(f'Пользователь написал: {msg_text}')
-        await submit_message(writer, msg_text)
-
-
-async def listen_server(reader: StreamReader, output_file: str):
-    async with aiofiles.open(output_file, 'a', encoding='utf-8') as handle:
-        await handle.write('-' * 50 + '\n')
-
-        message = format_msg('Соединение установлено')
-        logging.debug(message)
-        await handle.write(f'{message}\n')
-
-        while True:
-            server_response = await reader.readline()
-            try:
-                text_line = server_response.decode('utf-8').rstrip()
-            except UnicodeDecodeError:
-                break
-            message = format_msg(text_line)
-            logging.debug(message)
-            await handle.write(f'{message}\n')
-
-
-async def register(reader: StreamReader, writer: StreamWriter, nickname: str) -> str:
-    await reader.readline()
-
-    writer.write(EMPTY_LINE.encode())
-    await writer.drain()
-
-    await reader.readline()
-
-    nickname = nickname.replace('\n', '-')
-    writer.write(f'{nickname}\n'.encode())
-    await writer.drain()
-
-    server_line = await reader.readline()
-    user_info = json.loads(server_line.decode())
-
-    logging.debug(f'Account token: {user_info["account_hash"]}')
-
-    await reader.readline()
-    return user_info['account_hash']
 
 
 async def authorize(reader: StreamReader, writer: StreamWriter,
@@ -125,10 +94,18 @@ async def authorize(reader: StreamReader, writer: StreamWriter,
         raise InvalidToken(f'Token {token} is not exist')
     logging.debug(f'Выполнена авторизация. Имя пользователя - {hash_info["nickname"]}')
     await reader.readline()
+    return hash_info['nickname']
 
 
-async def submit_message(writer: StreamWriter, message_text: str):
+async def submit_msg(writer: StreamWriter, message_text: str):
     message_text = message_text.rstrip() + '\n\n'
     writer.write(message_text.encode())
     await writer.drain()
     logging.debug('Сообщение успешно отправлено')
+
+
+async def send_msgs(writer: StreamWriter, queue: asyncio.Queue):
+    while True:
+        msg_text = await queue.get()
+        logging.debug(f'Пользователь написал: {msg_text}')
+        await submit_msg(writer, msg_text)
