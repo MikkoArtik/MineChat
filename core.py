@@ -102,10 +102,3 @@ async def submit_msg(writer: StreamWriter, message_text: str):
     writer.write(message_text.encode())
     await writer.drain()
     logging.debug('Сообщение успешно отправлено')
-
-
-async def send_msgs(writer: StreamWriter, queue: asyncio.Queue):
-    while True:
-        msg_text = await queue.get()
-        logging.debug(f'Пользователь написал: {msg_text}')
-        await submit_msg(writer, msg_text)
