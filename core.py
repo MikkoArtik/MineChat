@@ -1,6 +1,5 @@
 import os
 import json
-import logging
 from datetime import datetime
 from enum import Enum
 
@@ -48,8 +47,6 @@ async def create_read_connection(host_address: str, port: int,
     try:
         queue.put_nowait(ReadConnectionStateChanged.ESTABLISHED)
         yield reader, writer
-    except Exception as e:
-        logging.error(str(e))
     finally:
         queue.put_nowait(ReadConnectionStateChanged.CLOSED)
         writer.close()
@@ -64,8 +61,6 @@ async def create_send_connection(host_address: str, port: int,
     try:
         queue.put_nowait(SendingConnectionStateChanged.ESTABLISHED)
         yield reader, writer
-    except Exception as e:
-        logging.error(str(e))
     finally:
         queue.put_nowait(SendingConnectionStateChanged.CLOSED)
         writer.close()
