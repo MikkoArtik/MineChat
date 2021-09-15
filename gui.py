@@ -20,6 +20,7 @@ from interface import NicknameReceived
 DEFAULT_HOST = 'minechat.dvmn.org'
 READING_PORT, SENDING_PORT = 5000, 5050
 MSG_HISTORY_FILE = 'm.txt'
+ENV_FILE = '.env'
 
 
 async def print_connection_status(logger: logging.Logger, queue: Queue):
@@ -39,7 +40,7 @@ async def main():
     parser.add_argument('--debug', type=bool, choices=[True, False],
                         help='Turn on debug mode')
 
-    dotenv.load_dotenv('.env')
+    dotenv.load_dotenv(ENV_FILE)
     arguments = parser.parse_args()
 
     connection_logger = logging.getLogger('ConnectionLogger')
@@ -92,6 +93,7 @@ async def main():
             messagebox.showinfo('Неверный токен',
                                 'Проверьте правильность ввода токена')
             return
+        dotenv.set_key(ENV_FILE, 'TOKEN', token)
         status_queue.put_nowait(NicknameReceived(nickname))
 
         send_coroutine = send_server_msgs(writer, sending_queue, watchdog_queue)
