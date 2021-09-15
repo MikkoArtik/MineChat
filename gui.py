@@ -1,19 +1,18 @@
-import asyncio
-from datetime import datetime
-from asyncio import Queue
-from asyncio import StreamWriter
-import logging
 import os
-from enum import Enum
+import logging
+from argparse import ArgumentParser
+
+import asyncio
+from asyncio import Queue
+
 from tkinter import messagebox
 
 import dotenv
-from argparse import ArgumentParser
 
 from core import InvalidToken
-from core import create_send_connection, create_read_connection
-from core import authorize
-from core import read_history_msgs, read_msgs, save_msgs, submit_msg
+from core import create_send_connection, authorize
+from core import read_server_msgs, save_msgs_to_file, send_server_msgs
+
 import interface
 from interface import NicknameReceived
 
@@ -21,41 +20,6 @@ from interface import NicknameReceived
 DEFAULT_HOST = 'minechat.dvmn.org'
 READING_PORT, SENDING_PORT = 5000, 5050
 MSG_HISTORY_FILE = 'm.txt'
-
-
-class Notification(Enum):
-    NEW_MESSAGE = 'New message in chat'
-    SENT_MESSAGE = 'Message was sent'
-
-
-def format_notification(text_val: Notification) -> str:
-    timestamp = int(datetime.now().timestamp())
-    return f'[{timestamp}] Connection is alive. {text_val}'
-
-
-async def read_server_msgs(host: str, port: int, status_queue: Queue,
-                           showing_msg_queue: Queue, saving_msg_queue: Queue,
-                           connection_status_queue: Queue):
-    await read_history_msgs(MSG_HISTORY_FILE, showing_msg_queue)
-    async with create_read_connection(host, port, status_queue) as connection:
-        reader, _ = connection
-        async for msg_text in read_msgs(reader):
-            showing_msg_queue.put_nowait(msg_text)
-            saving_msg_queue.put_nowait(msg_text)
-
-            notification = format_notification(Notification.NEW_MESSAGE)
-            connection_status_queue.put_nowait(notification)
-
-
-async def send_server_msgs(writer: StreamWriter, queue: asyncio.Queue,
-                           connection_status_queue: Queue):
-    while True:
-        msg_text = await queue.get()
-        logging.debug(f'Пользователь написал: {msg_text}')
-        await submit_msg(writer, msg_text)
-
-        notification = format_notification(Notification.SENT_MESSAGE)
-        connection_status_queue.put_nowait(notification)
 
 
 async def print_connection_status(logger: logging.Logger, queue: Queue):
@@ -111,11 +75,11 @@ async def main():
                                               sending_queue,
                                               status_queue)
 
-    read_coroutine = read_server_msgs(host, read_port, status_queue,
-                                      showing_msg_queue, saving_msgs_queue,
-                                      watchdog_queue)
+    read_coroutine = read_server_msgs(host, read_port, MSG_HISTORY_FILE,
+                                      status_queue, showing_msg_queue,
+                                      saving_msgs_queue, watchdog_queue)
 
-    save_coroutine = save_msgs(MSG_HISTORY_FILE, saving_msgs_queue)
+    save_coroutine = save_msgs_to_file(MSG_HISTORY_FILE, saving_msgs_queue)
 
     connection_logging_coroutine = print_connection_status(
         connection_logger, watchdog_queue)
