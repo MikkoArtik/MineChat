@@ -1,7 +1,6 @@
 import os
 import json
 from datetime import datetime
-from enum import Enum
 
 import asyncio
 from asyncio import StreamReader, StreamWriter
