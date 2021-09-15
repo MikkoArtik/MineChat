@@ -34,7 +34,7 @@ async def main():
                         help='Default connection parameters')
     parser.add_argument('--host', type=str, help='Host address')
     parser.add_argument('--read_port', type=int, help='Reading host port')
-    parser.add_argument('-send_port', type=int, help='Sending host port')
+    parser.add_argument('--send_port', type=int, help='Sending host port')
     parser.add_argument('--token', type=str, help='User token')
     parser.add_argument('--debug', type=bool, choices=[True, False],
                         help='Turn on debug mode')
