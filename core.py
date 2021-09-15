@@ -19,11 +19,6 @@ class InvalidToken(Exception):
     pass
 
 
-class MsgNotification(Enum):
-    NEW_MESSAGE = 'New message in chat'
-    SENT_MESSAGE = 'Message was sent'
-
-
 async def read_history_msgs_from_file(filepath: str, queue: Queue):
     if not os.path.exists(filepath):
         return
@@ -124,7 +119,7 @@ async def read_server_msgs(host: str, port: int, msg_history_file: str,
             showing_msg_queue.put_nowait(msg_text)
             saving_msg_queue.put_nowait(msg_text)
 
-            notification = format_notification(MsgNotification.NEW_MESSAGE.value)
+            notification = format_notification('New message in chat')
             connection_status_queue.put_nowait(notification)
 
 
@@ -146,5 +141,5 @@ async def send_server_msgs(writer: StreamWriter, queue: asyncio.Queue,
             else:
                 raise
 
-        notification = format_notification(MsgNotification.SENT_MESSAGE.value)
+        notification = format_notification('Message was sent')
         connection_status_queue.put_nowait(notification)
