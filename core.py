@@ -88,7 +88,7 @@ def format_notification(text_val: str) -> str:
     return f'[{timestamp}] Connection is alive. {text_val}'
 
 
-def format_failure_connection_notification(timeout_sec: float) -> str:
+def format_connection_fail_notification(timeout_sec: float) -> str:
     timestamp = int(datetime.now().timestamp())
     return f'[{timestamp}] {timeout_sec}s timeout is elapsed'
 
@@ -106,7 +106,8 @@ async def read_server_msgs(host: str, port: int, msg_history_file: str,
                     server_response = await reader.readline()
             except asyncio.TimeoutError:
                 if time_ctx.expired:
-                    notification = format_failure_connection_notification(timeout_sec)
+                    notification = format_connection_fail_notification(
+                        timeout_sec)
                     connection_status_queue.put_nowait(notification)
                     continue
                 else:
@@ -133,7 +134,7 @@ async def send_server_msgs(writer: StreamWriter, queue: asyncio.Queue,
                 await writer.drain()
         except asyncio.TimeoutError:
             if time_ctx.expired:
-                notification = format_failure_connection_notification(
+                notification = format_connection_fail_notification(
                     timeout_sec)
                 connection_status_queue.put_nowait(notification)
                 continue
