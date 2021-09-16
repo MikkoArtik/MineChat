@@ -19,6 +19,7 @@ from interface import NicknameReceived
 
 DEFAULT_HOST = 'minechat.dvmn.org'
 READING_PORT, SENDING_PORT = 5000, 5050
+DEFAULT_TIMEOUT_SEC = 1
 MSG_HISTORY_FILE = 'm.txt'
 ENV_FILE = '.env'
 
@@ -37,6 +38,8 @@ async def main():
     parser.add_argument('--read_port', type=int, help='Reading host port')
     parser.add_argument('--send_port', type=int, help='Sending host port')
     parser.add_argument('--token', type=str, help='User token')
+    parser.add_argument('--timeout', type=float,
+                        help='Connection timeout (sec)')
     parser.add_argument('--debug', type=bool, choices=[True, False],
                         help='Turn on debug mode')
 
@@ -64,6 +67,11 @@ async def main():
     else:
         token = os.getenv('TOKEN')
 
+    if arguments.timeout:
+        timeout = arguments.timeout
+    else:
+        timeout = DEFAULT_TIMEOUT_SEC
+
     showing_msg_queue = Queue()
     saving_msgs_queue = Queue()
 
@@ -78,7 +86,8 @@ async def main():
 
     read_coroutine = read_server_msgs(host, read_port, MSG_HISTORY_FILE,
                                       status_queue, showing_msg_queue,
-                                      saving_msgs_queue, watchdog_queue)
+                                      saving_msgs_queue, watchdog_queue,
+                                      timeout)
 
     save_coroutine = save_msgs_to_file(MSG_HISTORY_FILE, saving_msgs_queue)
 
@@ -96,10 +105,12 @@ async def main():
         dotenv.set_key(ENV_FILE, 'TOKEN', token)
         status_queue.put_nowait(NicknameReceived(nickname))
 
-        send_coroutine = send_server_msgs(writer, sending_queue, watchdog_queue)
+        send_coroutine = send_server_msgs(writer, sending_queue, watchdog_queue,
+                                          timeout)
 
         await asyncio.gather(draw_interface_coroutine, read_coroutine,
-                             save_coroutine, send_coroutine, connection_logging_coroutine)
+                             save_coroutine, send_coroutine,
+                             connection_logging_coroutine)
 
 
 if __name__ == '__main__':
