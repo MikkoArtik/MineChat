@@ -10,8 +10,8 @@ from tkinter import messagebox
 import dotenv
 
 from core import InvalidToken
-from core import create_send_connection, authorize
-from core import read_server_msgs, save_msgs_to_file, send_server_msgs
+from core import ConnectionStatement
+from core import Reader, Sender
 
 import interface
 from interface import NicknameReceived
@@ -26,8 +26,8 @@ ENV_FILE = '.env'
 
 async def print_connection_status(logger: logging.Logger, queue: Queue):
     while True:
-        line = await queue.get()
-        logger.debug(line)
+        state: ConnectionStatement = await queue.get()
+        logger.debug(state.status_notification)
 
 
 async def main():
@@ -72,45 +72,30 @@ async def main():
     else:
         timeout = DEFAULT_TIMEOUT_SEC
 
-    showing_msg_queue = Queue()
-    saving_msgs_queue = Queue()
-
-    sending_queue = Queue()
     status_queue = Queue()
-
     watchdog_queue = Queue()
 
-    draw_interface_coroutine = interface.draw(showing_msg_queue,
-                                              sending_queue,
+    reader = Reader(host, read_port, MSG_HISTORY_FILE, timeout, status_queue,
+                    watchdog_queue)
+
+    sender = Sender(host, send_port, token, timeout, status_queue,
+                    watchdog_queue)
+
+    draw_interface_coroutine = interface.draw(reader.showing_msgs_queue,
+                                              sender.sending_msgs_queue,
                                               status_queue)
-
-    read_coroutine = read_server_msgs(host, read_port, MSG_HISTORY_FILE,
-                                      status_queue, showing_msg_queue,
-                                      saving_msgs_queue, watchdog_queue,
-                                      timeout)
-
-    save_coroutine = save_msgs_to_file(MSG_HISTORY_FILE, saving_msgs_queue)
 
     connection_logging_coroutine = print_connection_status(
         connection_logger, watchdog_queue)
 
-    async with create_send_connection(host, send_port, status_queue) as connection:
-        reader, writer = connection
-        try:
-            nickname = await authorize(reader, writer, token)
-        except InvalidToken:
-            messagebox.showinfo('Неверный токен',
-                                'Проверьте правильность ввода токена')
-            return
+    try:
+        await asyncio.gather(draw_interface_coroutine, sender.run(),
+                             reader.run(), connection_logging_coroutine)
         dotenv.set_key(ENV_FILE, 'TOKEN', token)
-        status_queue.put_nowait(NicknameReceived(nickname))
-
-        send_coroutine = send_server_msgs(writer, sending_queue, watchdog_queue,
-                                          timeout)
-
-        await asyncio.gather(draw_interface_coroutine, read_coroutine,
-                             save_coroutine, send_coroutine,
-                             connection_logging_coroutine)
+    except InvalidToken:
+        messagebox.showinfo('Неверный токен',
+                            'Проверьте правильность ввода токена')
+        return
 
 
 if __name__ == '__main__':
