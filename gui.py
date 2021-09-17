@@ -1,6 +1,7 @@
 import os
 import logging
 from argparse import ArgumentParser
+from typing import NamedTuple
 
 import asyncio
 from asyncio import Queue
@@ -14,20 +15,52 @@ from core import ConnectionStatement
 from core import Reader, Sender
 
 import interface
-from interface import NicknameReceived
 
 
 DEFAULT_HOST = 'minechat.dvmn.org'
 READING_PORT, SENDING_PORT = 5000, 5050
-DEFAULT_TIMEOUT_SEC = 1
+DEFAULT_TIMEOUT_SEC = 5
 MSG_HISTORY_FILE = 'm.txt'
 ENV_FILE = '.env'
 
 
-async def print_connection_status(logger: logging.Logger, queue: Queue):
+class ConnectionParameters(NamedTuple):
+    host: str
+    read_port: int
+    send_port: int
+    token: str
+    timeout_sec: float
+
+
+async def monitor_connection_status(logger: logging.Logger, queue: Queue):
     while True:
         state: ConnectionStatement = await queue.get()
         logger.debug(state.status_notification)
+        if not state.is_enable:
+            raise ConnectionError
+
+
+async def handle_connection(conn_params: ConnectionParameters,
+                            logger: logging.Logger):
+    status_queue = Queue()
+    conn_monitoring_queue = Queue()
+    reader = Reader(conn_params.host, conn_params.read_port,
+                    MSG_HISTORY_FILE, conn_params.timeout_sec,
+                    status_queue, conn_monitoring_queue)
+
+    sender = Sender(conn_params.host, conn_params.send_port,
+                    conn_params.token, conn_params.timeout_sec,
+                    status_queue, conn_monitoring_queue)
+
+    draw_interface_coroutine = interface.draw(reader.showing_msgs_queue,
+                                              sender.sending_msgs_queue,
+                                              status_queue)
+
+    monitor_conn_coroutine = monitor_connection_status(logger,
+                                                       conn_monitoring_queue)
+
+    await asyncio.gather(draw_interface_coroutine, reader.run(), sender.run(),
+                         monitor_conn_coroutine)
 
 
 async def main():
@@ -72,30 +105,14 @@ async def main():
     else:
         timeout = DEFAULT_TIMEOUT_SEC
 
-    status_queue = Queue()
-    watchdog_queue = Queue()
-
-    reader = Reader(host, read_port, MSG_HISTORY_FILE, timeout, status_queue,
-                    watchdog_queue)
-
-    sender = Sender(host, send_port, token, timeout, status_queue,
-                    watchdog_queue)
-
-    draw_interface_coroutine = interface.draw(reader.showing_msgs_queue,
-                                              sender.sending_msgs_queue,
-                                              status_queue)
-
-    connection_logging_coroutine = print_connection_status(
-        connection_logger, watchdog_queue)
-
+    connection_params = ConnectionParameters(host, read_port, send_port, token,
+                                             timeout)
     try:
-        await asyncio.gather(draw_interface_coroutine, sender.run(),
-                             reader.run(), connection_logging_coroutine)
+        await handle_connection(connection_params, connection_logger)
         dotenv.set_key(ENV_FILE, 'TOKEN', token)
     except InvalidToken:
         messagebox.showinfo('Неверный токен',
                             'Проверьте правильность ввода токена')
-        return
 
 
 if __name__ == '__main__':

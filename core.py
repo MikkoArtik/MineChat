@@ -30,16 +30,16 @@ class InvalidToken(Exception):
 class ConnectionStatement:
     def __init__(self, timeout_sec: float, connection_type: int):
         self.timestamp = int(datetime.now().timestamp())
-        self.state = False
+        self.is_enable = False
         self.timeout_sec = timeout_sec
         self.connection_type = connection_type
 
     def set_state(self, is_enable: bool):
-        self.state = is_enable
+        self.is_enable = is_enable
 
     @property
     def status_notification(self) -> str:
-        if self.state:
+        if self.is_enable:
             notification = f'[{self.timestamp}] Connection is alive. '
             if self.connection_type == READ_CONNECTION:
                 return notification + 'New message in chat'
