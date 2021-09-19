@@ -1,20 +1,19 @@
 import os
 import logging
 from argparse import ArgumentParser
-from typing import NamedTuple
 
 import asyncio
-from asyncio import Queue
 
 from tkinter import messagebox
 
 import dotenv
 
-from core import InvalidToken
-from core import ConnectionStatement
-from core import Reader, Sender
-
 import interface
+from interface import TkAppClosed
+
+from core import InvalidToken
+from core import ConnectionParameters
+from core import ServerConnection
 
 
 DEFAULT_HOST = 'minechat.dvmn.org'
@@ -22,45 +21,6 @@ READING_PORT, SENDING_PORT = 5000, 5050
 DEFAULT_TIMEOUT_SEC = 5
 MSG_HISTORY_FILE = 'm.txt'
 ENV_FILE = '.env'
-
-
-class ConnectionParameters(NamedTuple):
-    host: str
-    read_port: int
-    send_port: int
-    token: str
-    timeout_sec: float
-
-
-async def monitor_connection_status(logger: logging.Logger, queue: Queue):
-    while True:
-        state: ConnectionStatement = await queue.get()
-        logger.debug(state.status_notification)
-        if not state.is_enable:
-            raise ConnectionError
-
-
-async def handle_connection(conn_params: ConnectionParameters,
-                            logger: logging.Logger):
-    status_queue = Queue()
-    conn_monitoring_queue = Queue()
-    reader = Reader(conn_params.host, conn_params.read_port,
-                    MSG_HISTORY_FILE, conn_params.timeout_sec,
-                    status_queue, conn_monitoring_queue)
-
-    sender = Sender(conn_params.host, conn_params.send_port,
-                    conn_params.token, conn_params.timeout_sec,
-                    status_queue, conn_monitoring_queue)
-
-    draw_interface_coroutine = interface.draw(reader.showing_msgs_queue,
-                                              sender.sending_msgs_queue,
-                                              status_queue)
-
-    monitor_conn_coroutine = monitor_connection_status(logger,
-                                                       conn_monitoring_queue)
-
-    await asyncio.gather(draw_interface_coroutine, reader.run(), sender.run(),
-                         monitor_conn_coroutine)
 
 
 async def main():
@@ -107,12 +67,19 @@ async def main():
 
     connection_params = ConnectionParameters(host, read_port, send_port, token,
                                              timeout)
+    server_conn = ServerConnection(connection_params, MSG_HISTORY_FILE)
+
+    draw_coroutine = interface.draw(server_conn.reader.showing_msgs_queue,
+                                    server_conn.sender.sending_msgs_queue,
+                                    server_conn.status_queue)
     try:
-        await handle_connection(connection_params, connection_logger)
+        await asyncio.gather(draw_coroutine, server_conn.run())
         dotenv.set_key(ENV_FILE, 'TOKEN', token)
     except InvalidToken:
         messagebox.showinfo('Неверный токен',
                             'Проверьте правильность ввода токена')
+    except TkAppClosed:
+        server_conn.initialize_interruption()
 
 
 if __name__ == '__main__':

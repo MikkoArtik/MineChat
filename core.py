@@ -1,6 +1,8 @@
+import logging
 import os
 import json
 from datetime import datetime
+from typing import NamedTuple
 
 import asyncio
 from asyncio import StreamReader, StreamWriter
@@ -9,6 +11,7 @@ from contextlib import asynccontextmanager
 
 import aiofiles
 import async_timeout
+import anyio
 
 from interface import ReadConnectionStateChanged
 from interface import SendingConnectionStateChanged
@@ -25,6 +28,14 @@ def format_msg(msg_text: str) -> str:
 
 class InvalidToken(Exception):
     pass
+
+
+class ConnectionParameters(NamedTuple):
+    host: str
+    read_port: int
+    send_port: int
+    token: str
+    timeout_sec: float
 
 
 class ConnectionStatement:
@@ -50,13 +61,11 @@ class ConnectionStatement:
 
 
 class Reader:
-    def __init__(self, host: str, port: int, msg_history_file: str,
-                 timeout_sec: float, status_queue: Queue,
+    def __init__(self, conn_params: ConnectionParameters,
+                 msg_history_file: str, status_queue: Queue,
                  connection_statement_queue: Queue):
-        self.__host = host
-        self.__port = port
+        self.__conn_params = conn_params
         self.__msg_history_file = msg_history_file
-        self.__timeout_sec = timeout_sec
 
         self.showing_msgs_queue = Queue()
         self.saving_msgs_queue = Queue()
@@ -64,26 +73,19 @@ class Reader:
         self.connection_statement_queue = connection_statement_queue
 
     @property
-    def host(self) -> str:
-        return self.__host
-
-    @property
-    def port(self) -> int:
-        return self.__port
+    def conn_params(self) -> ConnectionParameters:
+        return self.__conn_params
 
     @property
     def msg_history_file(self):
         return self.__msg_history_file
 
-    @property
-    def timeout_sec(self) -> float:
-        return self.__timeout_sec
-
     @asynccontextmanager
     async def create_connection(self):
         queue = self.status_queue
         queue.put_nowait(ReadConnectionStateChanged.INITIATED)
-        reader, writer = await asyncio.open_connection(self.host, self.port)
+        reader, writer = await asyncio.open_connection(
+            self.conn_params.host, self.conn_params.read_port)
         try:
             queue.put_nowait(ReadConnectionStateChanged.ESTABLISHED)
             yield reader, writer
@@ -110,9 +112,10 @@ class Reader:
         async with self.create_connection() as connection:
             reader, _ = connection
             while True:
-                state = ConnectionStatement(self.timeout_sec, READ_CONNECTION)
+                state = ConnectionStatement(self.conn_params.timeout_sec,
+                                            READ_CONNECTION)
                 try:
-                    with async_timeout.timeout(self.timeout_sec) as time_ctx:
+                    with async_timeout.timeout(self.conn_params.timeout_sec) as time_ctx:
                         server_response = await reader.readline()
 
                     state.set_state(is_enable=True)
@@ -130,43 +133,27 @@ class Reader:
                 self.connection_statement_queue.put_nowait(state)
 
     async def run(self):
-        await self.load_msgs_history()
         await asyncio.gather(self.start_reading(), self.save_msgs_to_file())
 
 
 class Sender:
-    def __init__(self, host: str, port: int, token: str,
-                 timeout_sec: float, status_queue: Queue,
+    def __init__(self, conn_params: ConnectionParameters, status_queue: Queue,
                  connection_statement_queue: Queue):
-        self.__host = host
-        self.__port = port
-        self.__token = token
-        self.__timeout_sec = timeout_sec
+        self.__conn_params = conn_params
 
         self.sending_msgs_queue = Queue()
         self.status_queue = status_queue
         self.connection_statement_queue = connection_statement_queue
 
     @property
-    def host(self) -> str:
-        return self.__host
-
-    @property
-    def port(self) -> int:
-        return self.__port
-
-    @property
-    def token(self) -> str:
-        return self.__token
-
-    @property
-    def timeout_sec(self) -> float:
-        return self.__timeout_sec
+    def conn_params(self) -> ConnectionParameters:
+        return self.__conn_params
 
     @asynccontextmanager
     async def create_connection(self):
         self.status_queue.put_nowait(SendingConnectionStateChanged.INITIATED)
-        reader, writer = await asyncio.open_connection(self.host, self.port)
+        reader, writer = await asyncio.open_connection(self.conn_params.host,
+                                                       self.conn_params.send_port)
         try:
             self.status_queue.put_nowait(SendingConnectionStateChanged.ESTABLISHED)
             yield reader, writer
@@ -178,7 +165,7 @@ class Sender:
     async def authorize(self, reader: StreamReader, writer: StreamWriter):
         await reader.readline()
 
-        line = self.token + '\n'
+        line = self.conn_params.token + '\n'
         writer.write(line.encode())
         await writer.drain()
 
@@ -186,7 +173,7 @@ class Sender:
         server_response = server_response.decode().rstrip()
         hash_info = json.loads(server_response)
         if hash_info is None:
-            raise InvalidToken(f'Token {self.token} is not exist')
+            raise InvalidToken(f'Token {self.conn_params.token} is not exist')
         await reader.readline()
         return hash_info['nickname']
 
@@ -197,12 +184,13 @@ class Sender:
             self.status_queue.put_nowait(NicknameReceived(nickname))
 
             while True:
-                state = ConnectionStatement(self.timeout_sec, SEND_CONNECTION)
+                state = ConnectionStatement(self.conn_params.timeout_sec,
+                                            SEND_CONNECTION)
                 msg_text = await self.sending_msgs_queue.get()
                 msg_text = msg_text.rstrip() + '\n\n'
                 writer.write(msg_text.encode())
                 try:
-                    with async_timeout.timeout(self.timeout_sec) as time_ctx:
+                    with async_timeout.timeout(self.conn_params.timeout_sec) as time_ctx:
                         await writer.drain()
                     state.set_state(is_enable=True)
                 except asyncio.TimeoutError:
@@ -211,3 +199,60 @@ class Sender:
                     else:
                         raise
                 self.connection_statement_queue.put_nowait(state)
+
+
+class ServerConnection:
+    def __init__(self, params: ConnectionParameters,
+                 msgs_history_file: str):
+        self.__params = params
+        self.__status_queue = Queue()
+        self.__conn_statement_queue = Queue()
+
+        self.__reader = Reader(params, msgs_history_file, self.__status_queue,
+                               self.__conn_statement_queue)
+
+        self.__sender = Sender(params, self.__status_queue,
+                               self.__conn_statement_queue)
+        self.__logger = logging.getLogger('ConnectionState')
+        self.__is_interrupt_connection = False
+
+    @property
+    def status_queue(self) -> Queue:
+        return self.__status_queue
+
+    @property
+    def conn_statement_queue(self) -> Queue:
+        return self.__conn_statement_queue
+
+    @property
+    def reader(self) -> Reader:
+        return self.__reader
+
+    @property
+    def sender(self) -> Sender:
+        return self.__sender
+
+    @property
+    def logger(self) -> logging.Logger:
+        return self.__logger
+
+    def initialize_interruption(self):
+        self.__is_interrupt_connection = True
+
+    async def monitor_connection_state(self):
+        while True:
+            state: ConnectionStatement = await self.conn_statement_queue.get()
+            self.logger.debug(state.status_notification)
+            if not state.is_enable:
+                raise ConnectionError
+
+    async def run(self):
+        await self.reader.load_msgs_history()
+        while not self.__is_interrupt_connection:
+            try:
+                async with anyio.create_task_group() as my_ctx:
+                    my_ctx.start_soon(self.reader.run)
+                    my_ctx.start_soon(self.sender.run)
+                    my_ctx.start_soon(self.monitor_connection_state)
+            except ConnectionError:
+                self.logger.debug(f'Trying to connect...')
