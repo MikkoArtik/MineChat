@@ -18,7 +18,7 @@ from core import ServerConnection
 
 DEFAULT_HOST = 'minechat.dvmn.org'
 READING_PORT, SENDING_PORT = 5000, 5050
-DEFAULT_TIMEOUT_SEC = 5
+DEFAULT_TIMEOUT_SEC = 3
 MSG_HISTORY_FILE = 'm.txt'
 ENV_FILE = '.env'
 
