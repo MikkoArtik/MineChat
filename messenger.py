@@ -9,8 +9,8 @@ from tkinter import messagebox
 import dotenv
 import anyio
 
-import interface
-from interface import TkAppClosed
+import messenger_interface
+from messenger_interface import TkAppClosed
 
 from core import InvalidToken
 from core import ConnectionParameters
@@ -71,7 +71,7 @@ async def main():
     server_conn = ServerConnection(connection_params, MSG_HISTORY_FILE)
     try:
         async with anyio.create_task_group() as task_ctx:
-            task_ctx.start_soon(interface.draw,
+            task_ctx.start_soon(messenger_interface.draw,
                                 server_conn.reader.showing_msgs_queue,
                                 server_conn.sender.sending_msgs_queue,
                                 server_conn.status_queue)

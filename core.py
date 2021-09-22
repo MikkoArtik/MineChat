@@ -15,9 +15,9 @@ import aiofiles
 import async_timeout
 import anyio
 
-from interface import ReadConnectionStateChanged
-from interface import SendingConnectionStateChanged
-from interface import NicknameReceived
+from messenger_interface import ReadConnectionStateChanged
+from messenger_interface import SendingConnectionStateChanged
+from messenger_interface import NicknameReceived
 
 
 NULL_NICKNAME = 'неизвестно'
@@ -54,7 +54,25 @@ async def create_connection(host: str, port: int):
         await writer.wait_closed()
 
 
-async def authorize(reader: StreamReader, writer: StreamWriter, token: str):
+async def register(reader: StreamReader, writer: StreamWriter, nickname: str) -> str:
+    await reader.readline()
+
+    writer.write('\n'.encode())
+    await writer.drain()
+
+    await reader.readline()
+
+    writer.write(f'{nickname}\n'.encode())
+    await writer.drain()
+
+    server_response = await reader.readline()
+    hash_info = json.loads(server_response.decode('utf-8').rstrip())
+    if hash_info is None:
+        raise InvalidToken('Empty server response')
+    return hash_info['account_hash']
+
+
+async def authorize(reader: StreamReader, writer: StreamWriter, token: str) -> str:
     await reader.readline()
 
     line = token + '\n'
