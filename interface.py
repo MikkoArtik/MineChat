@@ -1,7 +1,11 @@
-import tkinter as tk
-import asyncio
-from tkinter.scrolledtext import ScrolledText
 from enum import Enum
+
+import tkinter as tk
+from tkinter.scrolledtext import ScrolledText
+
+import asyncio
+
+import anyio
 
 
 class TkAppClosed(Exception):
@@ -98,7 +102,7 @@ def create_status_panel(root_frame):
     status_write_label = tk.Label(connections_frame, height=1, fg='grey', font='arial 10', anchor='w')
     status_write_label.pack(side="top", fill=tk.X)
 
-    return (nickname_label, status_read_label, status_write_label)
+    return nickname_label, status_read_label, status_write_label
 
 
 async def draw(messages_queue, sending_queue, status_updates_queue):
@@ -127,8 +131,9 @@ async def draw(messages_queue, sending_queue, status_updates_queue):
     conversation_panel = ScrolledText(root_frame, wrap='none')
     conversation_panel.pack(side="top", fill="both", expand=True)
 
-    await asyncio.gather(
-        update_tk(root_frame),
-        update_conversation_history(conversation_panel, messages_queue),
-        update_status_panel(status_labels, status_updates_queue)
-    )
+    async with anyio.create_task_group() as task_ctx:
+        task_ctx.start_soon(update_tk, root_frame),
+        task_ctx.start_soon(update_conversation_history, conversation_panel,
+                            messages_queue)
+        task_ctx.start_soon(update_status_panel, status_labels,
+                            status_updates_queue)

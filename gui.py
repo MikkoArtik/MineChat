@@ -7,6 +7,7 @@ import asyncio
 from tkinter import messagebox
 
 import dotenv
+import anyio
 
 import interface
 from interface import TkAppClosed
@@ -68,12 +69,13 @@ async def main():
     connection_params = ConnectionParameters(host, read_port, send_port, token,
                                              timeout)
     server_conn = ServerConnection(connection_params, MSG_HISTORY_FILE)
-
-    draw_coroutine = interface.draw(server_conn.reader.showing_msgs_queue,
-                                    server_conn.sender.sending_msgs_queue,
-                                    server_conn.status_queue)
     try:
-        await asyncio.gather(draw_coroutine, server_conn.run())
+        async with anyio.create_task_group() as task_ctx:
+            task_ctx.start_soon(interface.draw,
+                                server_conn.reader.showing_msgs_queue,
+                                server_conn.sender.sending_msgs_queue,
+                                server_conn.status_queue)
+            task_ctx.start_soon(server_conn.run)
         dotenv.set_key(ENV_FILE, 'TOKEN', token)
     except InvalidToken:
         messagebox.showinfo('Неверный токен',
@@ -83,4 +85,7 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.debug('App was closed')

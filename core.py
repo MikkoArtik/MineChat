@@ -20,12 +20,19 @@ from interface import SendingConnectionStateChanged
 from interface import NicknameReceived
 
 
+NULL_NICKNAME = 'неизвестно'
+
+
 def format_msg(msg_text: str) -> str:
     current_datetime = datetime.now().strftime('%d.%m.%y %H:%M')
     return f'[{current_datetime}] {msg_text}'
 
 
 class InvalidToken(Exception):
+    pass
+
+
+class TimeoutException(Exception):
     pass
 
 
@@ -91,7 +98,7 @@ class Reader:
         return self.__conn_params
 
     @property
-    def msg_history_file(self):
+    def msg_history_file(self) -> str:
         return self.__msg_history_file
 
     async def load_msgs_history(self):
@@ -110,18 +117,23 @@ class Reader:
 
     async def start_reading(self):
         host, port = self.conn_params.host, self.conn_params.read_port
-        async with create_connection(host, port) as connection:
-            reader, _ = connection
-            while True:
-                server_response = await reader.readline()
-                msg_text = server_response.decode('utf-8').rstrip()
-                format_msg_text = format_msg(msg_text)
+        try:
+            async with create_connection(host, port) as connection:
+                reader, _ = connection
+                while True:
+                    server_response = await reader.readline()
+                    msg_text = server_response.decode('utf-8').rstrip()
+                    format_msg_text = format_msg(msg_text)
 
-                self.showing_msgs_queue.put_nowait(format_msg_text)
-                self.saving_msgs_queue.put_nowait(format_msg_text)
+                    self.showing_msgs_queue.put_nowait(format_msg_text)
+                    self.saving_msgs_queue.put_nowait(format_msg_text)
+        except socket.gaierror:
+            return
 
     async def run(self):
-        await asyncio.gather(self.start_reading(), self.save_msgs_to_file())
+        async with anyio.create_task_group() as task_ctx:
+            task_ctx.start_soon(self.start_reading)
+            task_ctx.start_soon(self.save_msgs_to_file)
 
 
 class Sender:
@@ -135,15 +147,18 @@ class Sender:
 
     async def run(self):
         host, port = self.conn_params.host, self.conn_params.send_port
-        async with create_connection(host, port) as connection:
-            reader, writer = connection
-            await authorize(reader, writer, self.conn_params.token)
-            while True:
-                msg_text = await self.sending_msgs_queue.get()
-                msg_text = msg_text.rstrip() + '\n\n'
-                writer.write(msg_text.encode())
-                await writer.drain()
-                await reader.readline()
+        try:
+            async with create_connection(host, port) as connection:
+                reader, writer = connection
+                await authorize(reader, writer, self.conn_params.token)
+                while True:
+                    msg_text = await self.sending_msgs_queue.get()
+                    msg_text = msg_text.rstrip() + '\n\n'
+                    writer.write(msg_text.encode())
+                    await writer.drain()
+                    await reader.readline()
+        except socket.gaierror:
+            return
 
 
 class ServerConnection:
@@ -158,8 +173,6 @@ class ServerConnection:
         self.sender = Sender(params)
         self.logger = logging.getLogger('ConnectionState')
 
-
-
         self.__is_interrupt_connection = False
 
     @property
@@ -172,49 +185,48 @@ class ServerConnection:
     async def ping_server(self):
         self.status_queue.put_nowait(ReadConnectionStateChanged.INITIATED)
         self.status_queue.put_nowait(SendingConnectionStateChanged.INITIATED)
-        self.status_queue.put_nowait(NicknameReceived('неизвестно'))
+        self.status_queue.put_nowait(NicknameReceived(NULL_NICKNAME))
 
         host, port = self.conn_params.host, self.conn_params.send_port
         timeout_sec = self.conn_params.timeout_sec
-        try:
-            async with create_connection(host, port) as conn_ctx:
-                reader, writer = conn_ctx
+        async with create_connection(host, port) as conn_ctx:
+            reader, writer = conn_ctx
+            try:
+                async with async_timeout.timeout(timeout_sec) as time_ctx:
+                    nickname = await authorize(reader, writer,
+                                               self.conn_params.token)
+            except asyncio.TimeoutError:
+                if time_ctx.expired:
+                    state = ConnectionStatement(timeout_sec, False)
+                    self.conn_statement_queue.put_nowait(state)
+                    raise TimeoutException
+                else:
+                    raise
+
+            self.status_queue.put_nowait(NicknameReceived(nickname))
+            self.status_queue.put_nowait(ReadConnectionStateChanged.ESTABLISHED)
+            self.status_queue.put_nowait(SendingConnectionStateChanged.ESTABLISHED)
+
+            state = ConnectionStatement(timeout_sec, True)
+            self.conn_statement_queue.put_nowait(state)
+
+            while True:
+                writer.write('\n\n'.encode())
                 try:
                     async with async_timeout.timeout(timeout_sec) as time_ctx:
-                        nickname = await authorize(reader, writer,
-                                                   self.conn_params.token)
+                        await writer.drain()
+                        await reader.readline()
                 except asyncio.TimeoutError:
                     if time_ctx.expired:
                         state = ConnectionStatement(timeout_sec, False)
                         self.conn_statement_queue.put_nowait(state)
-                    raise
-
-                self.status_queue.put_nowait(NicknameReceived(nickname))
-                self.status_queue.put_nowait(ReadConnectionStateChanged.ESTABLISHED)
-                self.status_queue.put_nowait(SendingConnectionStateChanged.ESTABLISHED)
+                        raise TimeoutException
+                    else:
+                        raise
 
                 state = ConnectionStatement(timeout_sec, True)
                 self.conn_statement_queue.put_nowait(state)
-
-                while True:
-                    writer.write('\n\n'.encode())
-                    try:
-                        async with async_timeout.timeout(timeout_sec) as time_ctx:
-                            await writer.drain()
-                            await reader.readline()
-                    except asyncio.TimeoutError:
-                        if time_ctx.expired:
-                            state = ConnectionStatement(timeout_sec, False)
-                            self.conn_statement_queue.put_nowait(state)
-                            raise
-
-                    state = ConnectionStatement(timeout_sec, True)
-                    self.conn_statement_queue.put_nowait(state)
-                    await asyncio.sleep(timeout_sec)
-        except (socket.gaierror, OSError):
-            state = ConnectionStatement(timeout_sec, False)
-            self.conn_statement_queue.put_nowait(state)
-            raise
+                await asyncio.sleep(timeout_sec)
 
     async def print_connection_state(self):
         while True:
@@ -230,11 +242,9 @@ class ServerConnection:
                     my_ctx.start_soon(self.print_connection_state)
                     my_ctx.start_soon(self.reader.run)
                     my_ctx.start_soon(self.sender.run)
-            except (asyncio.TimeoutError, socket.gaierror, OSError):
-                self.logger.debug(f'Trying to connect...')
+            except (socket.gaierror, TimeoutException):
+                self.logger.debug(f'Trying to connect after {self.conn_params.timeout_sec}s...')
+                await asyncio.sleep(self.conn_params.timeout_sec)
 
         self.status_queue.put_nowait(ReadConnectionStateChanged.CLOSED)
         self.status_queue.put_nowait(SendingConnectionStateChanged.CLOSED)
-
-
-
