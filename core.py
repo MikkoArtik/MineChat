@@ -1,8 +1,8 @@
-import logging
-import os
-import json
-from datetime import datetime
 from typing import NamedTuple
+from datetime import datetime
+import os
+import logging
+import json
 
 import socket
 
