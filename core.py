@@ -21,6 +21,7 @@ from messenger_interface import NicknameReceived
 
 
 NULL_NICKNAME = 'неизвестно'
+BOT_NAMES_FILTER = ['eva', 'vlad']
 
 
 class InvalidToken(Exception):
@@ -37,6 +38,13 @@ class ConnectionParameters(NamedTuple):
     send_port: int
     token: str
     timeout_sec: float
+
+
+def check_is_bot(nickname: str) -> bool:
+    for template in BOT_NAMES_FILTER:
+        if template in nickname.lower():
+            return True
+    return False
 
 
 @asynccontextmanager
@@ -141,8 +149,12 @@ class Reader:
                 while True:
                     server_response = await reader.readline()
                     msg_text = server_response.decode('utf-8').rstrip()
-                    format_msg_text = self.format_msg(msg_text)
 
+                    nickname = msg_text.split(':')[0]
+                    if check_is_bot(nickname):
+                        continue
+
+                    format_msg_text = self.format_msg(msg_text)
                     self.showing_msgs_queue.put_nowait(format_msg_text)
                     self.saving_msgs_queue.put_nowait(format_msg_text)
         except socket.gaierror:
