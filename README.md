@@ -20,6 +20,9 @@ pip install -r requiremetns.txt
 ```commandline
 python registation.py
 ```
+После запуска появится окно:
+
+![registaration window](src/registration_window.PNG)
 
 
 ### Клиент для чтения и отправки сообщений
@@ -31,6 +34,8 @@ python messenger.py [--timeout] [--debug]
 + timeout - время задержки сервера (по умолчанию 3 секунды)
 + debug - включение отладочных сообщений
 
+После запуска появится окно:
+![messenger_window](src/messenger_window.PNG)
  
 # Цель проекта
 Изучить основы асинхронного программирования на языке Python
