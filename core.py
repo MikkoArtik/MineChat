@@ -23,11 +23,6 @@ from messenger_interface import NicknameReceived
 NULL_NICKNAME = 'неизвестно'
 
 
-def format_msg(msg_text: str) -> str:
-    current_datetime = datetime.now().strftime('%d.%m.%y %H:%M')
-    return f'[{current_datetime}] {msg_text}'
-
-
 class InvalidToken(Exception):
     pass
 
@@ -119,6 +114,11 @@ class Reader:
     def msg_history_file(self) -> str:
         return self.__msg_history_file
 
+    @staticmethod
+    def format_msg(msg_text: str) -> str:
+        current_datetime = datetime.now().strftime('%d.%m.%y %H:%M')
+        return f'[{current_datetime}] {msg_text}'
+
     async def load_msgs_history(self):
         if not os.path.exists(self.msg_history_file):
             return
@@ -141,7 +141,7 @@ class Reader:
                 while True:
                     server_response = await reader.readline()
                     msg_text = server_response.decode('utf-8').rstrip()
-                    format_msg_text = format_msg(msg_text)
+                    format_msg_text = self.format_msg(msg_text)
 
                     self.showing_msgs_queue.put_nowait(format_msg_text)
                     self.saving_msgs_queue.put_nowait(format_msg_text)

@@ -26,12 +26,6 @@ ENV_FILE = '.env'
 
 async def main():
     parser = ArgumentParser(description='GUI utility for minecraft chatting')
-    parser.add_argument('--default', type=bool, choices=[True, False],
-                        help='Default connection parameters')
-    parser.add_argument('--host', type=str, help='Host address')
-    parser.add_argument('--read_port', type=int, help='Reading host port')
-    parser.add_argument('--send_port', type=int, help='Sending host port')
-    parser.add_argument('--token', type=str, help='User token')
     parser.add_argument('--timeout', type=float,
                         help='Connection timeout (sec)')
     parser.add_argument('--debug', type=bool, choices=[True, False],
@@ -40,34 +34,20 @@ async def main():
     dotenv.load_dotenv(ENV_FILE)
     arguments = parser.parse_args()
 
-    connection_logger = logging.getLogger('ConnectionLogger')
     if arguments.debug:
         logging.basicConfig(level=logging.DEBUG)
-        connection_logger.setLevel(logging.DEBUG)
-
-    if arguments.default:
-        host = DEFAULT_HOST
-        read_port, send_port = READING_PORT, SENDING_PORT
-    else:
-        if arguments.host and arguments.read_port and arguments.send_port:
-            host = arguments.host
-            read_port = arguments.read_port
-            send_port = arguments.send_port
-        else:
-            raise Exception('Host address and/or port is not exist')
-
-    if arguments.token:
-        token = arguments.token
-    else:
-        token = os.getenv('TOKEN')
 
     if arguments.timeout:
-        timeout = arguments.timeout
+        timeout_sec = arguments.timeout
     else:
-        timeout = DEFAULT_TIMEOUT_SEC
+        timeout_sec = DEFAULT_TIMEOUT_SEC
 
-    connection_params = ConnectionParameters(host, read_port, send_port, token,
-                                             timeout)
+    token = os.getenv('TOKEN')
+    if not token:
+        raise Exception("Env file with token don't found")
+
+    connection_params = ConnectionParameters(DEFAULT_HOST, READING_PORT,
+                                             SENDING_PORT, token, timeout_sec)
     server_conn = ServerConnection(connection_params, MSG_HISTORY_FILE)
     try:
         async with anyio.create_task_group() as task_ctx:

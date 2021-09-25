@@ -132,7 +132,7 @@ async def draw(messages_queue, sending_queue, status_updates_queue):
     conversation_panel.pack(side="top", fill="both", expand=True)
 
     async with anyio.create_task_group() as task_ctx:
-        task_ctx.start_soon(update_tk, root_frame),
+        task_ctx.start_soon(update_tk, root_frame)
         task_ctx.start_soon(update_conversation_history, conversation_panel,
                             messages_queue)
         task_ctx.start_soon(update_status_panel, status_labels,

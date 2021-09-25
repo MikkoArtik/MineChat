@@ -1,6 +1,7 @@
 import asyncio
 import socket
 
+from tkinter import END
 from tkinter import Tk, Label, Entry, Button, messagebox, TclError
 
 import anyio
@@ -25,6 +26,7 @@ class TkAppClosed(Exception):
 class RegistrationInterface:
     def __init__(self):
         self.__nickname = ''
+        self.interface_root = self.create_interface()
 
     @property
     def nickname(self) -> str:
@@ -37,6 +39,7 @@ class RegistrationInterface:
                                  'Length of nickname must be more than zero')
         else:
             self.__nickname = nickname
+        text_field.delete(0, END)
 
     @staticmethod
     async def update_frame(root: Tk, time_interval=0.1):
@@ -47,7 +50,7 @@ class RegistrationInterface:
                 raise TkAppClosed
             await asyncio.sleep(time_interval)
 
-    async def create_interface(self):
+    def create_interface(self):
         root = Tk()
         root.title('Chat registration')
 
@@ -59,9 +62,7 @@ class RegistrationInterface:
         apply_button = Button(text='Registration')
         apply_button.grid(row=1, column=1)
         apply_button['command'] = lambda: self.set_current_nickname(nickname_field)
-
-        async with anyio.create_task_group() as task_ctx:
-            task_ctx.start_soon(self.update_frame, root)
+        return root
 
     async def get_token(self) -> str:
         async with create_connection(DEFAULT_HOST, SENDING_PORT) as conn_ctx:
@@ -75,16 +76,15 @@ class RegistrationInterface:
             if nickname:
                 token = await self.get_token()
                 dotenv.set_key(ENV_FILE, TOKEN_KEY, token)
-                messagebox.showinfo('token info',
-                                    'Your connection token was saved')
-                return
+                messagebox.showinfo('token info', 'Your token was saved')
+                self.__nickname = ''
             await asyncio.sleep(TIMEOUT_SEC)
 
     async def run(self):
         try:
             async with anyio.create_task_group() as task_ctx:
                 task_ctx.start_soon(self.register_in_chat)
-                task_ctx.start_soon(self.create_interface)
+                task_ctx.start_soon(self.update_frame, self.interface_root)
         except socket.gaierror:
             messagebox.showerror('Connection problem',
                                  'No internet connection')
