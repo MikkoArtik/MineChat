@@ -26,7 +26,7 @@ ENV_FILE = '.env'
 
 async def main():
     parser = ArgumentParser(description='GUI utility for minecraft chatting')
-    parser.add_argument('--timeout', type=float,
+    parser.add_argument('--timeout', type=float, default=DEFAULT_TIMEOUT_SEC,
                         help='Connection timeout (sec)')
     parser.add_argument('--debug', type=bool, choices=[True, False],
                         help='Turn on debug mode')
@@ -37,10 +37,7 @@ async def main():
     if arguments.debug:
         logging.basicConfig(level=logging.DEBUG)
 
-    if arguments.timeout:
-        timeout_sec = arguments.timeout
-    else:
-        timeout_sec = DEFAULT_TIMEOUT_SEC
+    timeout_sec = arguments.timeout
 
     token = os.getenv('TOKEN')
     if not token:
