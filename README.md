@@ -22,7 +22,7 @@ python registation.py
 ```
 После запуска появится окно:
 
-![registaration window](src/registration_window.PNG)
+![registration_window](https://user-images.githubusercontent.com/22727630/135081006-4e9eb137-37f1-4f7d-a800-3143f4d00cdf.PNG)
 
 
 ### Клиент для чтения и отправки сообщений
@@ -35,7 +35,7 @@ python messenger.py [--timeout] [--debug]
 + debug - включение отладочных сообщений
 
 После запуска появится окно:
-![messenger_window](src/messenger_window.PNG)
+![image](https://user-images.githubusercontent.com/22727630/135080738-8e98a68a-14e7-40b7-a2f6-48286bb229e7.png)
  
 # Цель проекта
 Изучить основы асинхронного программирования на языке Python
