@@ -40,7 +40,7 @@ class ConnectionParameters(NamedTuple):
     timeout_sec: float
 
 
-def check_is_bot(nickname: str) -> bool:
+def is_bot(nickname: str) -> bool:
     for template in BOT_NAMES_FILTER:
         if template in nickname.lower():
             return True
@@ -69,10 +69,10 @@ async def register(reader: StreamReader, writer: StreamWriter, nickname: str) ->
     await writer.drain()
 
     server_response = await reader.readline()
-    hash_info = json.loads(server_response.decode('utf-8').rstrip())
-    if hash_info is None:
+    user_info = json.loads(server_response.decode('utf-8').rstrip())
+    if user_info is None:
         raise InvalidToken('Empty server response')
-    return hash_info['account_hash']
+    return user_info['account_hash']
 
 
 async def authorize(reader: StreamReader, writer: StreamWriter, token: str) -> str:
@@ -151,7 +151,7 @@ class Reader:
                     msg_text = server_response.decode('utf-8').rstrip()
 
                     nickname = msg_text.split(':')[0]
-                    if check_is_bot(nickname):
+                    if is_bot(nickname):
                         continue
 
                     format_msg_text = self.format_msg(msg_text)
